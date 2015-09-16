@@ -98,7 +98,8 @@ end
 %     make_tree_params.MAX_DEPTH = params.MAX_DEPTH;
 %     params.tree = make_tree(x_train, y_train, split_function, make_tree_params);
 %     
-% 
+%     %from prof verma
+%
 %     function [tree] = make_tree(DATA_x,DATA_y, split_function,params)
 %     %
 %     %  function [tree] = make_tree(DATA,split_function,params)
