@@ -1,0 +1,31 @@
+%stitching_driver 
+
+%building a randomized temporary dataset
+load sarcos_inv
+rand_idx = randperm(size(sarcos_inv, 1));   %rand_idx
+split_ratio = 0.2; %splitting the data
+split_cut = ceil(size(sarcos_inv,1)*split_ratio);
+X = sarcos_inv(rand_idx(1:split_cut), 1:21);
+Y = sarcos_inv(rand_idx(1:split_cut), 22:28);
+cross_valid_ndx = cross_validate_split(size(X,1), 5);
+pred_x = sarcos_inv(rand_idx((split_cut+1):(split_cut+10)), 1:21);
+pred_y = sarcos_inv(rand_idx((split_cut+1):(split_cut+10)), 22:28);
+
+meta_params = [];
+meta_params.depth_MIN = 3; 
+meta_params.depth_MAX = 5; 
+meta_params.split_function = @split_PCA;
+common_test_params = meta_params;
+
+%build tree
+params = tree_regressor_train(X, Y, meta_params, cross_valid_ndx);
+
+meta_params.tree = params.tree;
+%making the input for algorithm , the input are the partitions C
+meta_params.partitions = {params.tree.left.left.left, params.tree.left.left.right, params.tree.left.right.left, ... 
+                           params.tree.left.right.right, params.tree.right.left.left, params.tree.right.left.right, ...
+                           params.tree.right.right.left, params.tree.right.right.right};
+meta_params.alpha = 0.70;
+
+params = stitching(X, Y, meta_params)
+
