@@ -1,0 +1,99 @@
+%edited version with professor nakul verma
+%commented version original code
+
+function params = kernel_regressor_train(X, Y, meta_params, cross_valid_ndx)
+    dst = pdist(X);
+    X_diam = max(dst(:));
+    hrange = linspace(min(dst(:)),X_diam/2, 100);
+    num_h = length(hrange);
+    clear dst;
+    param_settings = cell(num_h,1);
+    for hidx=1:num_h
+        h = hrange(hidx);
+        param_settings{hidx}.h = h;
+    end
+    
+    [min_param_setting, min_avgloss, all_loss] = cross_validate(X, Y, ...
+        cross_valid_ndx, param_settings, meta_params, [], @valid_train_fxn, @valid_test_fxn, @rmse_loss);
+    params = valid_train_fxn(X, Y, min_param_setting, meta_params);
+end
+
+function param_out = valid_train_fxn(train_x, train_y, cv_params, meta_params)
+    param_out = train_kernel_regressor(train_x,train_y);
+    param_out.h = cv_params.h;
+    param_out.kernel_type = meta_params.kernel_type;
+end
+
+function ypred = valid_test_fxn(pred_x, params, common_test_params)
+   ypred = kernel_regressor_test(pred_x, params); 
+end
+
+
+function params = train_kernel_regressor(X,Y)
+    params.X_tree = createns(X,'nsmethod','kdtree');
+    params.Y = Y;
+end
+
+% % tic
+% % 
+% %     K = meta_params.kernel_type;
+% %     num_h = meta_params.num_hvals; %number of h values to test 
+% %     
+% %     %%% will not need to use after using the cross validate file 
+% %     rand_idx = randperm(size(xtrain, 1)); 
+% %     x_train = xtrain(1:ceil(size(rand_idx,2)*0.8),:);
+% %     x_valid = xtrain((ceil(size(rand_idx,2)*0.8)+1):end,:);
+% %     y_train = ytrain(1:ceil(size(rand_idx,2)*0.8),:);
+% %     y_valid = ytrain(ceil(size(rand_idx,2)*0.8)+1:end,:);
+% %     
+% %     %calculate mean of y values and pairwise distances
+% %     mean_y_train = repmat(mean(y_train),size(y_valid,1),1);
+% %     pair_distance = pdist(x_train); %sorted
+% %     
+% %     %generate h_values
+% %     min_pairdist = min(pair_distance);
+% %     med_percentile_pairdist = median(pair_distance);
+% %     h_values = logspace(log10(min_pairdist),log10(med_percentile_pairdist),num_h);
+% %     
+% %     %preallocate error and h tables
+% %     error_table = zeros(1, num_h);
+% %     h_table = zeros(1, num_h);
+% % 
+% %     parfor iter = 1:size(h_values,2)
+% %         
+% %         h = h_values(iter);
+% %         %ranges = rangesearch(x_train, x_valid, h);
+% %         
+% %         % M = number of training samples, N = number  of test samples
+% %         % columns are the triangle_kernel results for each test sample (MxN) 
+% %         weights = K(x_train, x_valid, h); 
+% %         
+% %         % each column represents the sum of the weights for each test sample(1xN)
+% %         total_weights = sum(weights); %denominator 
+% % 
+% %         sum_weights = weights'*y_train;
+% %         total = repmat(total_weights',1,size(y_train,2));
+% %         prediction = sum_weights./total; %predicted y-values
+% %         
+% %         % change nan-values to average y-values
+% %         nan_values = find(isnan(prediction));
+% %         prediction(nan_values) = mean_y_train(nan_values);
+% % 
+% %         %calculate mse OLD
+% %         %error = (prediction - y_valid).^2;
+% %         %mse = sum(sum(error./size(error,1)));
+% %         loss = rmse_loss(prediction, y_valid); %rmse_loss function
+% %         h_table(iter) = h;
+% %         error_table(iter) = loss;
+% %         
+% %     end
+% %     
+% %     %find best h value
+% %     [error,idx] = min(error_table);
+% %     params = [];
+% %     params.h = h_table(idx);
+% %     params.xtrain = xtrain;
+% %     params.ytrain = ytrain;
+% % toc
+% % 
+% % end 
