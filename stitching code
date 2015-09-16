@@ -1,0 +1,51 @@
+%input: X, Y, and meta_params, which consists of the partitions "C" and "alpha"
+function params = stitching(X, Y, meta_params)
+
+    cells = meta_params.partitions;          
+    centers = zeros(size(cells,2),size(X,2));   
+    for i = 1:size(cells,2) %line 4 (center of cell)
+        centers(i,:) = mean(X(cells{i}.idxs,:));
+    end
+
+    rad = 8.5; %temporary*** will include range search
+    
+    [centers_ordered, centers_dist, centers_ndx] = ff_traversal(centers); %line 6, building net 
+    net_idx = find(centers_dist<rad); %finding all distances that are not smaller than the net
+    Qc = centers_ordered(1:(net_idx-1),:); %finding Qc (points needed to build the net)
+
+    distance_idxs = zeros(1, size(cells,2)); %line 7, assiging every data point in cells to q = argmin...etc.
+    for j = 1:size(cells,2)
+        distance_idxs(j) = knnsearch(Qc, centers(j,:));
+        params.cell_avgnet{j} = Qc(distance_idxs(j),:);
+    end 
+    %precomputed for fast estimate
+    
+    nq = zeros(1, size(Qc,1)); %line 8, find number of points assigned to q
+    
+    %line 9, find average y value of points assigned to q
+    Yq = zeros(size(Qc,1), size(Y,2)); 
+ 
+    for k = 1:size(cells,2)
+        cells{k}.data_X = repmat(Qc(distance_idxs(k),:),size(cells{k}.idxs,2),1);
+        nq(distance_idxs(k)) = nq(distance_idxs(k)) + size(cells{k}.idxs,2); %nq 
+        Yq(distance_idxs(k),:) = Yq(distance_idxs(k),:) + cells{k}.avg_y*nq(distance_idxs(k)); %Yq
+    end
+    
+    %could try to find a faster way here 
+    for m = 1:size(Yq,1)
+        Yq(m,:) = Yq(m,:)/nq(m);
+    end 
+
+    %params for the fast estimate section 
+    params.nets = Qc;
+    params.rad = rad;
+    params.h = 2*rad/meta_params.alpha;
+    params.nq = nq;
+    params.Yq = Yq;
+    params.tree = meta_params.tree;
+    params.xtrain = X;
+    params.ytrain = Y;
+    %params.cell_avgnet will be used in line 6 for fast estimate 
+
+
+end
