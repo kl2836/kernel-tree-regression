@@ -1,0 +1,184 @@
+% X and Y are the training values
+% meta_params contains three values: depth_MIN is the minimum depth,
+% depth_MAX is the maximum depth to test, and split_function is euther
+% split_PCA, split_2M, split_RP, or split_KD
+% cross_valid_ndx are the indices for the data points for cross validation
+% given by the function cross_validate_split
+
+% eg. 
+% meta_params.depth_MIN = 5;
+% meta_params.depth_MAX = 7;
+% meta_params.split_function = @split_PCA;
+% cross_valid_ndx = cross_validate_split(size(X,1), 5);
+
+function params = tree_regressor_train(X, Y, meta_params, cross_valid_ndx)
+
+    min_depth = meta_params.depth_MIN;
+    max_depth = meta_params.depth_MAX;
+    num_depths = max_depth - min_depth + 1;
+    param_settings = cell(num_depths,1);
+    depth = min_depth;
+    for depth_idx = 1:num_depths
+        param_settings{depth_idx}.depth = depth;
+        depth = depth + 1;
+    end    
+    
+    [min_param_setting, min_avgloss, all_loss] = cross_validate(X, Y, ...
+        cross_valid_ndx, param_settings, meta_params, [], @valid_train_fxn, @valid_test_fxn, @rmse_loss);
+    
+    params = valid_train_fxn(X, Y, min_param_setting, meta_params);
+
+end 
+
+function param_out = valid_train_fxn(train_x, train_y, cv_params, meta_params)
+
+    split_function = meta_params.split_function;
+    meta_params.MAX_DEPTH = cv_params.depth;
+    
+    param_out = train_tree_regressor(train_x, train_y, split_function, meta_params);
+    param_out.depth = cv_params.depth;
+    param_out.split_function = meta_params.split_function;
+    
+end
+
+function ypred = valid_test_fxn(pred_x, params, common_test_params)
+
+   ypred = tree_regressor_test(pred_x, params); 
+   
+end
+
+function params = train_tree_regressor(X,Y, split_function, make_tree_params)
+    
+    params.xtrain = X;
+    params.ytrain = Y;
+    params.tree = make_tree(X, Y, split_function, make_tree_params);
+    
+end
+% 
+% function params = tree_regressor_train(xtrain, ytrain, meta_params)
+% tic   
+%     make_tree_params.split_fxn_params.spill = meta_params.split_fxn_params.spill;
+%     split_function = meta_params.split_function;
+%     min_depth = meta_params.depth_MIN;
+%     max_depth = meta_params.depth_MAX;
+%     num_depths = max_depth - min_depth + 1;
+%  
+%     rand_idx = randperm(size(xtrain, 1)); 
+%     x_train = xtrain(1:ceil(size(rand_idx,2)*0.8),:);
+%     x_valid = xtrain((ceil(size(rand_idx,2)*0.8)+1):end,:);
+%     y_train = ytrain(1:ceil(size(rand_idx,2)*0.8),:);
+%     y_valid = ytrain(ceil(size(rand_idx,2)*0.8)+1:end,:);
+% 
+%     prediction = zeros(size(x_valid,1),size(y_valid,2));
+%     
+%     error_table = inf(1, max_depth); 
+%     
+%     for iter = min_depth:max_depth
+%         
+%          make_tree_params.MAX_DEPTH = iter;
+%          
+%          tree = make_tree(x_train, y_train, split_function, make_tree_params);
+%          partitions = get_partition_cells(x_valid, tree);
+% 
+%          for i = 1:size(x_valid,1)
+%              points = partitions(i).idxs;
+%              prediction(i,:) = mean(y_train(points,:));
+%          end 
+%            
+%         loss = rmse_loss(prediction, y_valid); %rmse_loss function
+%         error_table(iter) = loss;
+%         
+%     end 
+%     
+%     [error,index] = min(error_table);
+%     params = [];
+%     params.xtrain = xtrain;
+%     params.ytrain = ytrain;
+%     params.MAX_DEPTH = index;
+%     make_tree_params.MAX_DEPTH = params.MAX_DEPTH;
+%     params.tree = make_tree(x_train, y_train, split_function, make_tree_params);
+%     
+% 
+%     function [tree] = make_tree(DATA_x,DATA_y, split_function,params)
+%     %
+%     %  function [tree] = make_tree(DATA,split_function,params)
+%     %
+%     %
+% 
+%         if nargin < 2;  split_function = @split_PCA; end
+%         if nargin < 3;  params = []; end
+%         if ~isfield(params,'MAX_DEPTH'); params.MAX_DEPTH = 15; end
+%         if ~isfield(params,'split_fxn_params');  
+%             split_fxn_params.spill = 0;
+%             params.split_fxn_params = split_fxn_params;
+%         end
+% 
+%         tree = create_tree(DATA_x,DATA_y, 1:size(DATA_x,1),split_function,params.split_fxn_params, params.MAX_DEPTH,1);
+% 
+%         function [tree] = create_tree(DATA_x, DATA_y, idxs,split_function,split_fxn_params, MAX_DEPTH,curr_depth)
+% 
+%         tree.idxs = idxs;
+%         tree.left = [];
+%         tree.right = [];
+%         tree.avg_y = [];
+%         tree.threshold = NaN;
+%         tree.split_dir = NaN;
+%         tree.proj_data = [];
+% 
+%         if curr_depth >= MAX_DEPTH; return; end;
+%         if length(idxs)<=1; return; end;
+% 
+%         [idx_left, idx_right, threshold, split_dir, proj_data] = split_function(DATA_x(idxs,:), split_fxn_params); %%
+%         left_idxs = idxs(idx_left);
+%         %left_y_avg = mean(DATA_y(left_idxs));
+%         right_idxs = idxs(idx_right);
+%         %right_y_avg = mean(DATA_y(right_idxs));
+% 
+%         tree.left  = create_tree(DATA_x,DATA_y, left_idxs ,split_function,split_fxn_params,MAX_DEPTH,curr_depth+1);%
+%         tree.right = create_tree(DATA_x,DATA_y, right_idxs,split_function,split_fxn_params,MAX_DEPTH,curr_depth+1);%
+% 
+%         tree.threshold = threshold;
+%         tree.split_dir = split_dir;
+%         tree.proj_data = proj_data;
+%         tree.avg_y = mean(DATA_y(idxs));
+%         end
+% 
+% 
+%     end
+% 
+%     function partitions = get_partition_cells(TEST_DATA, tree, MAX_DEPTH)
+%     %
+%     %  function partitions = get_partition_cells(TEST_DATA, tree, MAX_DEPTH)
+%     %
+%     %
+%     if nargin<3,
+%         MAX_DEPTH = inf;
+%     end
+% 
+%     partitions = traverse(TEST_DATA,tree,1,MAX_DEPTH);
+% 
+%     function partitions = traverse(TEST_DATA,tree,curr_depth,MAX_DEPTH)
+% 
+%     partitions(1:size(TEST_DATA,1),1) = tree;
+%     if curr_depth >=MAX_DEPTH; return; end;
+%     if ~isfield(tree,'left'); return; end;
+%     if isempty(tree.left); return; end;
+% 
+%     idx = TEST_DATA*tree.split_dir <= tree.threshold;
+% 
+%     if sum(idx)>0
+%         lparts = traverse(TEST_DATA(idx,:),tree.left,curr_depth+1,MAX_DEPTH);
+%         partitions(idx) = lparts;
+%     end
+% 
+%     if sum(~idx)>0
+%         rparts = traverse(TEST_DATA(~idx,:),tree.right,curr_depth+1,MAX_DEPTH);
+%         partitions(~idx) = rparts;
+%     end
+% 
+%     end
+%     end
+% 
+% toc 
+% 
+% end 
