@@ -1,0 +1,19 @@
+function ypred = tree_regressor_test(pred_x, params, meta_params)
+
+    xtrain = params.xtrain;
+    ytrain = params.ytrain;
+    tree = params.tree;
+    partitions = get_partition_cells(pred_x, tree);
+    
+    ypred = zeros(size(pred_x,1), size(ytrain,2));
+    
+    for i = 1:size(pred_x,1)
+        points = partitions(i).idxs;
+        ypred(i,:) = mean(ytrain(points,:));
+    end
+
+end 
+
+
+
+
